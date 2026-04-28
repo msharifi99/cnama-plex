@@ -1,0 +1,23 @@
+[Unit]
+Description=CNama Plex download manager
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=cnama
+Group=cnama
+WorkingDirectory=/opt/cnama-plex
+EnvironmentFile=/etc/cnama-plex.env
+ExecStart=/usr/bin/node /opt/cnama-plex/dist/server/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/cnama-plex /var/lib/cnama-plex /path/to/Plex
+
+[Install]
+WantedBy=multi-user.target
