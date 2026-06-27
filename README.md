@@ -42,7 +42,7 @@ Open the Vite dev app:
 http://localhost:5173
 ```
 
-The API server runs at `http://localhost:8001` and is proxied by Vite during development.
+The API server runs at `http://localhost:8010` and is proxied by Vite during development.
 
 For a production-style local run:
 
@@ -54,13 +54,13 @@ npm start
 Open:
 
 ```text
-http://localhost:8001
+http://localhost:8010
 ```
 
 ## Scripts
 
 ```bash
-npm run dev         # API server on :8001 and Vite app on :5173
+npm run dev         # API server on :8010 and Vite app on :5173
 npm run test        # TypeScript compile for tests, then node --test
 npm run typecheck   # Type-check client/shared and server configs
 npm run build       # Build Vite client and TypeScript server into dist/
@@ -78,7 +78,7 @@ docker compose up -d --build
 Open:
 
 ```text
-http://localhost:8001
+http://localhost:8010
 ```
 
 By default, Compose stores the SQLite database and temporary downloads in `./data`, and maps Plex libraries to local test folders under `./data/plex`.
@@ -86,7 +86,7 @@ By default, Compose stores the SQLite database and temporary downloads in `./dat
 For a real Plex server, create a `.env` file next to `docker-compose.yml` and point the bind mounts at your host library folders:
 
 ```bash
-PORT=8001
+PORT=8010
 PUID=1000
 PGID=1000
 CNAMA_DATA_DIR=/srv/cnama-plex
@@ -95,7 +95,6 @@ PLEX_TV_DIR=/your/plex/TV
 DOWNLOAD_CONCURRENCY=2
 DOWNLOAD_CONNECTIONS=32
 PUBLIC_BASE_PATH=
-UPSTREAM_ORIGIN=https://30nama.com
 ```
 
 The image runs the app as `PUID`/`PGID`, defaulting to `1000:1000`. On startup it fixes ownership for the app-owned `/data` mount, but your Plex Movies and TV directories still need to be writable by that UID/GID on the host.
@@ -135,7 +134,7 @@ Compose path: docker-compose.yml
 4. Add these stack environment variables in Portainer:
 
 ```bash
-PORT=8001
+PORT=8010
 PUID=1000
 PGID=1000
 CNAMA_DATA_DIR=/srv/cnama-plex
@@ -144,7 +143,6 @@ PLEX_TV_DIR=/your/plex/TV
 DOWNLOAD_CONCURRENCY=2
 DOWNLOAD_CONNECTIONS=32
 PUBLIC_BASE_PATH=
-UPSTREAM_ORIGIN=https://30nama.com
 ```
 
 5. Deploy the stack. Portainer builds `cnama-plex:latest` from this repo because the compose file includes `build.context: .`.
@@ -258,7 +256,7 @@ The app should now survive reboots and restart automatically after failures.
 Open it from your LAN:
 
 ```text
-http://192.168.2.13:8001
+http://192.168.2.13:8010
 ```
 
 ## Running Behind nginx at /cnama
@@ -269,7 +267,7 @@ If nginx strips the `/cnama` prefix before proxying to the Node app, no app conf
 
 ```nginx
 location /cnama/ {
-  proxy_pass http://127.0.0.1:8001/;
+  proxy_pass http://127.0.0.1:8010/;
   proxy_http_version 1.1;
   proxy_set_header Upgrade $http_upgrade;
   proxy_set_header Connection "upgrade";
@@ -320,11 +318,10 @@ The app reads `/etc/cnama-plex.env` through systemd and also supports a local `.
 
 ```bash
 HOST=0.0.0.0
-PORT=8001
+PORT=8010
 PUID=1000
 PGID=1000
 PUBLIC_BASE_PATH=
-UPSTREAM_ORIGIN=https://30nama.com
 SQLITE_PATH=/var/lib/cnama-plex/cnama.sqlite
 DOWNLOAD_TMP_DIR=/var/lib/cnama-plex/downloads
 PLEX_MOVIES_DIR=/your/plex/Movies
@@ -336,7 +333,6 @@ DOWNLOAD_CONNECTIONS=32
 - `HOST` and `PORT` control where Fastify listens.
 - `PUID` and `PGID` control the UID/GID used by the Docker container after startup.
 - `PUBLIC_BASE_PATH` serves the app and API under a prefix such as `/cnama`.
-- `UPSTREAM_ORIGIN` is reported by `/api/health` and defaults to `https://30nama.com`.
 - `SQLITE_PATH` stores the queue database.
 - `DOWNLOAD_TMP_DIR` stores partial `.part` files before they are moved into Plex.
 - `PLEX_MOVIES_DIR` and `PLEX_TV_DIR` are the final Plex library roots.

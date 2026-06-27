@@ -34,7 +34,7 @@ const children = commands.map(({ name, command, args }) => {
 
 let shuttingDown = false;
 
-console.log("Dev server API: http://localhost:8001");
+console.log("Dev server API: http://localhost:8010");
 console.log("Dev app:        http://localhost:5173");
 
 process.on("SIGINT", () => shutdown(0));

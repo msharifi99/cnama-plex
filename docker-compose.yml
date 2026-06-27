@@ -6,14 +6,13 @@ services:
     container_name: cnama-plex
     restart: unless-stopped
     ports:
-      - "${PORT:-8001}:8001"
+      - "${PORT:-8010}:8010"
     environment:
       HOST: 0.0.0.0
-      PORT: 8001
+      PORT: 8010
       PUID: "${PUID:-1000}"
       PGID: "${PGID:-1000}"
       PUBLIC_BASE_PATH: "${PUBLIC_BASE_PATH:-}"
-      UPSTREAM_ORIGIN: "${UPSTREAM_ORIGIN:-https://30nama.com}"
       SQLITE_PATH: /data/cnama.sqlite
       DOWNLOAD_TMP_DIR: /data/downloads
       PLEX_MOVIES_DIR: /media/movies

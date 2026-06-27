@@ -51,8 +51,7 @@ function loadDotEnv(filePath: string): void {
 
 export const config = {
   host: process.env.HOST ?? "0.0.0.0",
-  port: envInt("PORT", 8001),
-  upstreamOrigin: process.env.UPSTREAM_ORIGIN ?? "https://30nama.com",
+  port: envInt("PORT", 8010),
   sqlitePath: resolvePath(process.env.SQLITE_PATH, "./data/cnama.sqlite"),
   downloadTmpDir: resolvePath(process.env.DOWNLOAD_TMP_DIR, "./data/downloads"),
   plexMoviesDir: resolvePath(process.env.PLEX_MOVIES_DIR, "./data/plex/Movies"),

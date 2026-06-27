@@ -60,7 +60,7 @@ function broadcast(event: unknown): void {
 }
 
 function registerApiRoutes(prefix: string): void {
-  app.get(`${prefix}/api/health`, async () => ({ ok: true, upstreamOrigin: config.upstreamOrigin }));
+  app.get(`${prefix}/api/health`, async () => ({ ok: true  }));
 
   app.get(`${prefix}/ws/jobs`, { websocket: true }, (socket) => {
     sockets.add(socket);

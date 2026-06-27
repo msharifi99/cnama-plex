@@ -14,7 +14,7 @@ RUN npm run build
 FROM node:24-bookworm-slim AS runtime
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
-    PORT=8001 \
+    PORT=8010 \
     PUID=1000 \
     PGID=1000 \
     SQLITE_PATH=/data/cnama.sqlite \
@@ -36,7 +36,7 @@ RUN mkdir -p /data/downloads /media/movies /media/tv \
   && chmod +x /usr/local/bin/cnama-plex-entrypoint \
   && chown -R node:node /app /data /media
 
-EXPOSE 8001
+EXPOSE 8010
 VOLUME ["/data", "/media/movies", "/media/tv"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

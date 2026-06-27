@@ -8,10 +8,10 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     proxy: {
-      "/api": "http://localhost:8001",
-      "/browse": "http://localhost:8001",
+      "/api": "http://localhost:8010",
+      "/browse": "http://localhost:8010",
       "/ws": {
-        target: "ws://localhost:8001",
+        target: "ws://localhost:8010",
         ws: true
       }
     }
