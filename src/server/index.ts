@@ -69,12 +69,12 @@ function registerApiRoutes(prefix: string): void {
   });
 
   app.post(`${prefix}/api/detected-links/preview`, async (request, reply) => {
-    const body = request.body as { pageTitle?: string; links?: DetectedLink[] };
+    const body = request.body as { pageTitle?: string; folderName?: string; links?: DetectedLink[] };
     if (!Array.isArray(body.links)) {
       reply.code(400).send({ error: "links must be an array" });
       return;
     }
-    return buildPreview(body.pageTitle, body.links);
+    return buildPreview(body.pageTitle, body.links, body.folderName);
   });
 
   app.post(`${prefix}/api/download-batches`, async (request, reply) => {
@@ -91,6 +91,7 @@ function registerApiRoutes(prefix: string): void {
       sourcePageUrl: body.sourcePageUrl,
       pageTitle: body.pageTitle,
       title: body.title,
+      folderName: body.folderName,
       year: body.year,
       mediaType: body.mediaType,
       season: body.season,

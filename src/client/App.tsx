@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { buildQueueRequest, formatBytes, jobTitleLine, parseLinks, statusLabel } from "./viewModel";
 
 type MediaType = "movie" | "series";
 type JobStatus = "queued" | "running" | "completed" | "failed" | "canceled" | "skipped";
@@ -18,7 +19,9 @@ type Preview = {
   title: string;
   year?: string;
   mediaType: MediaType;
-  season: number;
+  season: string;
+  matchedFolderName?: string;
+  folderCandidates: string[];
   items: PreviewItem[];
 };
 
@@ -53,6 +56,7 @@ const APP_BASE_PATH = getAppBasePath();
 export function App() {
   const [rawText, setRawText] = useState("");
   const [pageTitle, setPageTitle] = useState("");
+  const [selectedFolderName, setSelectedFolderName] = useState<string | undefined>();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [queuing, setQueuing] = useState(false);
@@ -75,6 +79,7 @@ export function App() {
   useEffect(() => {
     if (detectedLinks.length === 0) {
       setPreview(null);
+      setSelectedFolderName(undefined);
       return;
     }
 
@@ -83,7 +88,7 @@ export function App() {
       void fetch(apiPath("/api/detected-links/preview"), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ pageTitle, links: detectedLinks }),
+        body: JSON.stringify({ pageTitle, folderName: selectedFolderName, links: detectedLinks }),
         signal: ac.signal
       })
         .then((r) => (r.ok ? (r.json() as Promise<Preview>) : null))
@@ -97,7 +102,7 @@ export function App() {
       window.clearTimeout(timer);
       ac.abort();
     };
-  }, [detectedLinks, pageTitle]);
+  }, [detectedLinks, pageTitle, selectedFolderName]);
 
   const activeJobs = useMemo(() => jobs.filter((j) => j.status === "queued" || j.status === "running"), [jobs]);
   const needsActionJobs = useMemo(() => jobs.filter((j) => j.status === "failed" || j.status === "canceled"), [jobs]);
@@ -130,19 +135,11 @@ export function App() {
     const r = await fetch(apiPath("/api/download-batches"), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
+      body: JSON.stringify(buildQueueRequest({
         pageTitle,
-        title: preview.title,
-        year: preview.year,
-        mediaType: preview.mediaType,
-        season: preview.season,
-        links: preview.items.map((i) => ({
-          url: i.url,
-          label: i.label,
-          selected: i.selected,
-          episode: i.episode
-        }))
-      })
+        selectedFolderName,
+        preview
+      }))
     });
     setQueuing(false);
     if (!r.ok) return;
@@ -150,6 +147,7 @@ export function App() {
     const count = selectedCount;
     setRawText("");
     setPageTitle("");
+    setSelectedFolderName(undefined);
     setPreview(null);
     setSuccessMsg(`${count} download${count !== 1 ? "s" : ""} queued`);
     window.setTimeout(() => setSuccessMsg(null), 4000);
@@ -253,7 +251,11 @@ export function App() {
                 <Field label="Title">
                   <input
                     value={preview.title}
-                    onChange={(e) => setPreview((p) => (p ? { ...p, title: e.target.value } : null))}
+                    onChange={(e) => {
+                      setSelectedFolderName(undefined);
+                      setPageTitle(e.target.value);
+                      setPreview((p) => (p ? { ...p, title: e.target.value, matchedFolderName: undefined } : null));
+                    }}
                   />
                 </Field>
                 <Field label="Year">
@@ -273,14 +275,35 @@ export function App() {
                 </Field>
                 <Field label="Season">
                   <input
-                    type="number"
-                    min="1"
+                    type="text"
                     value={preview.season}
                     disabled={preview.mediaType === "movie"}
-                    onChange={(e) => setPreview((p) => (p ? { ...p, season: Number.parseInt(e.target.value, 10) || 1 } : null))}
+                    onChange={(e) => setPreview((p) => (p ? { ...p, season: e.target.value || "1" } : null))}
                   />
                 </Field>
               </div>
+
+              {(preview.matchedFolderName || preview.folderCandidates.length > 0) && (
+                <div className="folder-match">
+                  {preview.folderCandidates.length > 0 ? (
+                    <Field label="Folder">
+                      <select
+                        value={selectedFolderName ?? preview.matchedFolderName ?? ""}
+                        onChange={(e) => setSelectedFolderName(e.target.value || undefined)}
+                      >
+                        <option value="">New folder: {preview.title}</option>
+                        {preview.folderCandidates.map((folder) => (
+                          <option value={folder} key={folder}>
+                            {folder}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : (
+                    <span>Matched existing folder: {preview.matchedFolderName}</span>
+                  )}
+                </div>
+              )}
 
               <div className="items-header">
                 <span>
@@ -310,8 +333,7 @@ export function App() {
                       <span>{item.destinationPath}</span>
                     </div>
                     <input
-                      type="number"
-                      min="1"
+                      type="text"
                       value={item.episode ?? ""}
                       aria-label="Episode number"
                       disabled={preview.mediaType === "movie"}
@@ -529,7 +551,7 @@ function GroupSummary({ jobs }: { jobs: Job[] }) {
 }
 
 function StatusBadge({ status }: { status: JobStatus }) {
-  return <span className={`status status-${status}`}>{status}</span>;
+  return <span className={`status status-${status}`}>{statusLabel(status)}</span>;
 }
 
 async function postJobAction(id: number, action: "cancel" | "retry", onDone: () => void) {
@@ -588,57 +610,11 @@ function groupJobsByTitle(jobs: Job[]): Array<{ title: string; jobs: Job[] }> {
   return [...groups.entries()].map(([title, groupJobs]) => ({ title, jobs: groupJobs }));
 }
 
-function jobTitleLine(job: Job): string {
-  if (job.mediaType === "series" && job.episode) {
-    return `${job.title} · E${String(job.episode).padStart(2, "0")}`;
-  }
-  return job.title;
-}
-
 function tabEmptyLabel(tab: JobsTab): string {
   if (tab === "active") return "active downloads";
   if (tab === "needs-action") return "items needing action";
   if (tab === "done") return "completed downloads";
   return "downloads";
-}
-
-function parseLinks(text: string): DetectedLink[] {
-  const urlRe = /https?:\/\/[^\s"'<>]+/gi;
-  const mediaRe = /\.(mp4|mkv|avi|mov|m4v|webm|wmv|srt|ass|ssa|sub|zip|rar)(?:[?#]|$)/i;
-  const seen = new Map<string, DetectedLink>();
-
-  for (const line of text.split(/\n+/)) {
-    for (const match of line.matchAll(urlRe)) {
-      const clean = match[0].replace(/[),.;\]]+$/g, "");
-      try {
-        const url = new URL(clean);
-        if ((url.protocol === "http:" || url.protocol === "https:") && mediaRe.test(url.pathname + url.search)) {
-          seen.set(url.toString(), { url: url.toString(), label: line.trim() || undefined });
-        }
-      } catch {
-        // Ignore malformed pasted text.
-      }
-    }
-  }
-
-  return [...seen.values()];
-}
-
-function formatBytes(received: number, total?: number): string {
-  if (!total) return humanBytes(received);
-  return `${humanBytes(received)} / ${humanBytes(total)}`;
-}
-
-function humanBytes(value: number): string {
-  if (value < 1024) return `${value} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let amount = value / 1024;
-  let unit = units[0];
-  for (let i = 1; amount >= 1024 && i < units.length; i += 1) {
-    amount /= 1024;
-    unit = units[i];
-  }
-  return `${amount.toFixed(amount >= 10 ? 1 : 2)} ${unit}`;
 }
 
 function IconCheck() {

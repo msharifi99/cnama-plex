@@ -7,6 +7,20 @@ TypeScript/Node web app for pasting direct media links, reviewing the inferred P
 ```bash
 npm install
 cp .env.example .env
+npm run dev
+```
+
+Open the Vite dev app:
+
+```text
+http://localhost:5173
+```
+
+The API server runs at `http://localhost:8001` and is proxied by Vite during development.
+
+For a production-style local run:
+
+```bash
 npm run build
 npm start
 ```
@@ -15,6 +29,45 @@ Open:
 
 ```text
 http://localhost:8001
+```
+
+## Docker Compose
+
+Build and run the app:
+
+```bash
+docker compose up -d --build
+```
+
+Open:
+
+```text
+http://localhost:8001
+```
+
+By default, Compose stores the SQLite database and temporary downloads in `./data`, and maps Plex libraries to local test folders under `./data/plex`.
+
+For a real Plex server, create a `.env` file next to `docker-compose.yml` and point the bind mounts at your host library folders:
+
+```bash
+PORT=8001
+PLEX_MOVIES_DIR=/your/plex/Movies
+PLEX_TV_DIR=/your/plex/TV
+DOWNLOAD_CONCURRENCY=2
+DOWNLOAD_CONNECTIONS=32
+PUBLIC_BASE_PATH=
+UPSTREAM_ORIGIN=https://30nama.com
+```
+
+The image runs as UID/GID `1000`, so make sure the host `./data`, movies, and TV directories are writable by that user or adjust ownership/permissions on the host.
+
+Inside the container, these are always mapped to:
+
+```bash
+SQLITE_PATH=/data/cnama.sqlite
+DOWNLOAD_TMP_DIR=/data/downloads
+PLEX_MOVIES_DIR=/media/movies
+PLEX_TV_DIR=/media/tv
 ```
 
 ## Home Server Requirements
@@ -188,4 +241,7 @@ DOWNLOAD_TMP_DIR=/var/lib/cnama-plex/downloads
 PLEX_MOVIES_DIR=/your/plex/Movies
 PLEX_TV_DIR=/your/plex/TV
 DOWNLOAD_CONCURRENCY=2
+DOWNLOAD_CONNECTIONS=32
 ```
+
+`DOWNLOAD_CONCURRENCY` controls how many queued items run at the same time. `DOWNLOAD_CONNECTIONS` controls how many byte-range connections each new file download uses when the upstream server supports ranges.

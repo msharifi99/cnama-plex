@@ -394,6 +394,23 @@ svg {
   gap: 7px;
 }
 
+.folder-match {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(11, 122, 117, 0.18);
+  border-radius: var(--radius);
+  background: #ecf7f5;
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.folder-match label {
+  width: 100%;
+}
+
 .items-header {
   display: flex;
   align-items: center;

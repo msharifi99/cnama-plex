@@ -1,0 +1,24 @@
+services:
+  cnama-plex:
+    build:
+      context: .
+    image: cnama-plex:latest
+    container_name: cnama-plex
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8001}:8001"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8001
+      PUBLIC_BASE_PATH: "${PUBLIC_BASE_PATH:-}"
+      UPSTREAM_ORIGIN: "${UPSTREAM_ORIGIN:-https://30nama.com}"
+      SQLITE_PATH: /data/cnama.sqlite
+      DOWNLOAD_TMP_DIR: /data/downloads
+      PLEX_MOVIES_DIR: /media/movies
+      PLEX_TV_DIR: /media/tv
+      DOWNLOAD_CONCURRENCY: "${DOWNLOAD_CONCURRENCY:-2}"
+      DOWNLOAD_CONNECTIONS: "${DOWNLOAD_CONNECTIONS:-32}"
+    volumes:
+      - ./data:/data
+      - ${PLEX_MOVIES_DIR:-./data/plex/Movies}:/media/movies
+      - ${PLEX_TV_DIR:-./data/plex/TV}:/media/tv

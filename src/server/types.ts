@@ -26,6 +26,8 @@ export type PreviewResponse = {
   year?: string;
   mediaType: MediaType;
   season: number;
+  matchedFolderName?: string;
+  folderCandidates: string[];
   items: PreviewItem[];
 };
 
@@ -33,6 +35,7 @@ export type CreateBatchRequest = {
   sourcePageUrl?: string;
   pageTitle?: string;
   title: string;
+  folderName?: string;
   year?: string;
   mediaType: MediaType;
   season?: number;

@@ -58,5 +58,6 @@ export const config = {
   plexMoviesDir: resolvePath(process.env.PLEX_MOVIES_DIR, "./data/plex/Movies"),
   plexTvDir: resolvePath(process.env.PLEX_TV_DIR, "./data/plex/TV"),
   downloadConcurrency: envInt("DOWNLOAD_CONCURRENCY", 2),
+  downloadConnections: envInt("DOWNLOAD_CONNECTIONS", 32),
   publicBasePath: normalizeBasePath(process.env.PUBLIC_BASE_PATH)
 };
