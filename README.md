@@ -1,6 +1,32 @@
 # CNama Plex
 
-TypeScript/Node web app for pasting direct media links, reviewing the inferred Plex layout, and downloading selected items into Plex library folders.
+TypeScript/Fastify/React web app for pasting direct media links, reviewing the inferred Plex layout, and downloading selected items into Plex library folders.
+
+## What It Does
+
+- Detects direct HTTP/HTTPS media links from pasted text.
+- Infers movie or series metadata from page titles, link labels, and filenames.
+- Previews Plex destination paths before anything is queued.
+- Matches existing Plex folders, including high-confidence fuzzy matches and ambiguous folder choices.
+- Downloads selected items with a SQLite-backed queue, live WebSocket progress, cancel, and retry actions.
+- Uses parallel byte-range downloads when the upstream server supports ranges, then falls back to resumable sequential downloads when needed.
+- Skips files that already exist at the final Plex destination.
+
+The downloader only accepts HTTP and HTTPS URLs and refuses download hosts that resolve to private network addresses.
+
+## Project Layout
+
+- `src/client` contains the React/Vite UI.
+- `src/server` contains the Fastify API, SQLite persistence, naming logic, and downloader.
+- `tests` contains Node test runner coverage for naming, queue payloads, and downloader behavior.
+- `deploy` contains the systemd service and production env example for tarball installs.
+- `Dockerfile` and `docker-compose.yml` define the containerized deployment.
+
+## Requirements
+
+- Docker with Docker Compose for the container workflow.
+- Node.js 22 or newer for direct local/systemd installs. Node.js 24 is what the Docker image uses.
+- Writable movie and TV library directories for the user running the app.
 
 ## Local Development
 
@@ -31,6 +57,16 @@ Open:
 http://localhost:8001
 ```
 
+## Scripts
+
+```bash
+npm run dev         # API server on :8001 and Vite app on :5173
+npm run test        # TypeScript compile for tests, then node --test
+npm run typecheck   # Type-check client/shared and server configs
+npm run build       # Build Vite client and TypeScript server into dist/
+npm run release     # Build and create cnama-plex-<version>.tgz
+```
+
 ## Docker Compose
 
 Build and run the app:
@@ -51,6 +87,9 @@ For a real Plex server, create a `.env` file next to `docker-compose.yml` and po
 
 ```bash
 PORT=8001
+PUID=1000
+PGID=1000
+CNAMA_DATA_DIR=/srv/cnama-plex
 PLEX_MOVIES_DIR=/your/plex/Movies
 PLEX_TV_DIR=/your/plex/TV
 DOWNLOAD_CONCURRENCY=2
@@ -59,7 +98,7 @@ PUBLIC_BASE_PATH=
 UPSTREAM_ORIGIN=https://30nama.com
 ```
 
-The image runs as UID/GID `1000`, so make sure the host `./data`, movies, and TV directories are writable by that user or adjust ownership/permissions on the host.
+The image runs the app as `PUID`/`PGID`, defaulting to `1000:1000`. On startup it fixes ownership for the app-owned `/data` mount, but your Plex Movies and TV directories still need to be writable by that UID/GID on the host.
 
 Inside the container, these are always mapped to:
 
@@ -69,6 +108,53 @@ DOWNLOAD_TMP_DIR=/data/downloads
 PLEX_MOVIES_DIR=/media/movies
 PLEX_TV_DIR=/media/tv
 ```
+
+## Portainer Deployment
+
+This repository does not include a registry-publishing workflow or a separate Portainer compose file. Use the existing `docker-compose.yml` as the Portainer stack file.
+
+1. Push this repo to a Git host Portainer can read.
+2. On your homelab host, create persistent app storage:
+
+```bash
+sudo mkdir -p /srv/cnama-plex
+sudo chown -R 1000:1000 /srv/cnama-plex
+```
+
+If you set different `PUID`/`PGID` values, use those for ownership instead. Make sure that same UID/GID can also write to your Plex Movies and TV folders.
+
+3. In Portainer, add a stack from Git:
+
+```text
+Stacks -> Add stack -> Repository
+Repository URL: <your repo URL>
+Repository reference: refs/heads/main
+Compose path: docker-compose.yml
+```
+
+4. Add these stack environment variables in Portainer:
+
+```bash
+PORT=8001
+PUID=1000
+PGID=1000
+CNAMA_DATA_DIR=/srv/cnama-plex
+PLEX_MOVIES_DIR=/your/plex/Movies
+PLEX_TV_DIR=/your/plex/TV
+DOWNLOAD_CONCURRENCY=2
+DOWNLOAD_CONNECTIONS=32
+PUBLIC_BASE_PATH=
+UPSTREAM_ORIGIN=https://30nama.com
+```
+
+5. Deploy the stack. Portainer builds `cnama-plex:latest` from this repo because the compose file includes `build.context: .`.
+6. Enable GitOps updates for the stack. Use a webhook for immediate redeploys, or polling if you prefer Portainer to check the repo periodically.
+
+```text
+git push -> Portainer pulls the repo -> Portainer rebuilds/redeploys the stack
+```
+
+For a manual update, push your code, then open the stack in Portainer and choose pull/redeploy.
 
 ## Home Server Requirements
 
@@ -230,12 +316,15 @@ sudo systemctl start cnama-plex
 
 ## Configuration
 
-The app reads `/etc/cnama-plex.env` through systemd and also supports a local `.env` file when run manually.
+The app reads `/etc/cnama-plex.env` through systemd and also supports a local `.env` file when run manually. Docker Compose also reads `.env` for host bind-mount paths.
 
 ```bash
 HOST=0.0.0.0
 PORT=8001
+PUID=1000
+PGID=1000
 PUBLIC_BASE_PATH=
+UPSTREAM_ORIGIN=https://30nama.com
 SQLITE_PATH=/var/lib/cnama-plex/cnama.sqlite
 DOWNLOAD_TMP_DIR=/var/lib/cnama-plex/downloads
 PLEX_MOVIES_DIR=/your/plex/Movies
@@ -244,4 +333,23 @@ DOWNLOAD_CONCURRENCY=2
 DOWNLOAD_CONNECTIONS=32
 ```
 
-`DOWNLOAD_CONCURRENCY` controls how many queued items run at the same time. `DOWNLOAD_CONNECTIONS` controls how many byte-range connections each new file download uses when the upstream server supports ranges.
+- `HOST` and `PORT` control where Fastify listens.
+- `PUID` and `PGID` control the UID/GID used by the Docker container after startup.
+- `PUBLIC_BASE_PATH` serves the app and API under a prefix such as `/cnama`.
+- `UPSTREAM_ORIGIN` is reported by `/api/health` and defaults to `https://30nama.com`.
+- `SQLITE_PATH` stores the queue database.
+- `DOWNLOAD_TMP_DIR` stores partial `.part` files before they are moved into Plex.
+- `PLEX_MOVIES_DIR` and `PLEX_TV_DIR` are the final Plex library roots.
+- `DOWNLOAD_CONCURRENCY` controls how many queued items run at the same time.
+- `DOWNLOAD_CONNECTIONS` controls how many byte-range connections each new file download uses when the upstream server supports ranges.
+- `CNAMA_DATA_DIR` is only used by Docker Compose to choose the host directory mounted at `/data`.
+
+## API Surface
+
+- `GET /api/health`
+- `POST /api/detected-links/preview`
+- `POST /api/download-batches`
+- `GET /api/jobs`
+- `POST /api/jobs/:id/cancel`
+- `POST /api/jobs/:id/retry`
+- `GET /ws/jobs`

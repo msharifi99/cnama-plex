@@ -43,12 +43,16 @@ export type NewJobInput = {
 export class AppDatabase {
   private readonly db: DatabaseSync;
 
-  constructor() {
-    fs.mkdirSync(path.dirname(config.sqlitePath), { recursive: true });
-    this.db = new DatabaseSync(config.sqlitePath);
+  constructor(sqlitePath = config.sqlitePath) {
+    prepareSqlitePath(sqlitePath);
+    this.db = openDatabase(sqlitePath);
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec("PRAGMA foreign_keys = ON");
     this.migrate();
+  }
+
+  close(): void {
+    this.db.close();
   }
 
   createBatch(title: string, mediaType: MediaType, jobs: NewJobInput[]): string {
@@ -209,6 +213,44 @@ export class AppDatabase {
       CREATE INDEX IF NOT EXISTS idx_jobs_batch_id ON jobs(batch_id);
     `);
   }
+}
+
+function prepareSqlitePath(sqlitePath: string): void {
+  const directory = path.dirname(sqlitePath);
+
+  try {
+    fs.mkdirSync(directory, { recursive: true });
+  } catch (error) {
+    throw new Error(`Unable to create SQLite directory ${directory} for ${sqlitePath}: ${formatError(error)}`, {
+      cause: error
+    });
+  }
+
+  try {
+    if (fs.existsSync(sqlitePath)) {
+      fs.accessSync(sqlitePath, fs.constants.R_OK | fs.constants.W_OK);
+    } else {
+      fs.accessSync(directory, fs.constants.W_OK);
+    }
+  } catch (error) {
+    throw new Error(
+      `SQLite database is not writable at ${sqlitePath}. Ensure the app user can write to ${directory}. ` +
+        "For Docker bind mounts, make the host data directory writable by the configured PUID/PGID.",
+      { cause: error }
+    );
+  }
+}
+
+function openDatabase(sqlitePath: string): DatabaseSync {
+  try {
+    return new DatabaseSync(sqlitePath);
+  } catch (error) {
+    throw new Error(`Unable to open SQLite database at ${sqlitePath}: ${formatError(error)}`, { cause: error });
+  }
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function mapJob(row: JobRow): JobRecord {
