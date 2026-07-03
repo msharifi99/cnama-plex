@@ -26,6 +26,7 @@ export type PreviewResponse = {
   year?: string;
   mediaType: MediaType;
   season: number;
+  libraryPaths: Record<MediaType, string>;
   matchedFolderName?: string;
   folderCandidates: string[];
   items: PreviewItem[];

@@ -22,7 +22,7 @@ test(
   "database startup reports unwritable SQLite directories clearly",
   { skip: process.platform === "win32" || process.getuid?.() === 0 },
   () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "cnama-plex-db-unwritable-"));
+    const root = fs.mkdtempSync(path.join("/tmp", "cnama-plex-db-unwritable-"));
     const dbPath = path.join(root, "cnama.sqlite");
     fs.chmodSync(root, 0o555);
 

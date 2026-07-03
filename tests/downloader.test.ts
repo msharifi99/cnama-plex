@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
+import type { JobRecord } from "../src/server/types.js";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "cnama-plex-downloader-"));
 
@@ -13,6 +14,10 @@ process.env.PLEX_TV_DIR = path.join(root, "TV");
 
 const { AppDatabase } = await import("../src/server/db.js");
 const { DownloadManager } = await import("../src/server/downloader.js");
+
+type DownloadManagerInternals = {
+  download(job: JobRecord, signal: AbortSignal): Promise<void>;
+};
 
 test("cancel leaves completed jobs unchanged", () => {
   const db = new AppDatabase();
@@ -37,3 +42,39 @@ test("cancel leaves completed jobs unchanged", () => {
   assert.equal(result?.status, "completed");
   assert.equal(db.getJob(job.id)?.status, "completed");
 });
+
+test(
+  "downloads report unwritable destination directories clearly",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    const testRoot = fs.mkdtempSync(path.join("/tmp", "cnama-plex-downloader-perms-"));
+    const libraryRoot = path.join(testRoot, "Movies");
+    fs.mkdirSync(libraryRoot);
+    fs.chmodSync(libraryRoot, 0o555);
+
+    const db = new AppDatabase(path.join(testRoot, "cnama.sqlite"));
+    const downloads = new DownloadManager(db, () => undefined);
+    const batchId = db.createBatch("Dune", "movie", [
+      {
+        sourceUrl: "http://93.184.216.34/dune.mkv",
+        mediaType: "movie",
+        title: "Dune",
+        destinationPath: path.join(libraryRoot, "Dune", "Dune.mkv"),
+        tmpPath: path.join(root, "downloads", "dune-perms.part")
+      }
+    ]);
+    const job = db.listJobs().find((item) => item.batchId === batchId);
+    assert.ok(job);
+
+    try {
+      await assert.rejects(
+        () => (downloads as unknown as DownloadManagerInternals).download(job, new AbortController().signal),
+        /Unable to create Plex destination directory .*Dune.*Ensure the app user can write/
+      );
+    } finally {
+      db.close();
+      fs.chmodSync(libraryRoot, 0o755);
+      fs.rmSync(testRoot, { recursive: true, force: true });
+    }
+  }
+);

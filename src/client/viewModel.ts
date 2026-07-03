@@ -18,10 +18,13 @@ export type QueuePreview = {
   year?: string;
   mediaType: ClientMediaType;
   season: string | number;
+  libraryPaths?: Record<ClientMediaType, string>;
   matchedFolderName?: string;
   items: Array<ClientDetectedLink & {
     selected: boolean;
     episode?: string | number;
+    extension?: string;
+    destinationPath?: string;
   }>;
 };
 
@@ -71,6 +74,40 @@ export function buildQueueRequest(input: {
   };
 }
 
+export function previewWithUpdatedDestinationPaths<T extends QueuePreview>(preview: T, selectedFolderName?: string): T {
+  const libraryPaths = preview.libraryPaths;
+  if (!libraryPaths) {
+    return preview;
+  }
+
+  return {
+    ...preview,
+    items: preview.items.map((item) => {
+      if (!item.extension) {
+        return item;
+      }
+
+      return {
+        ...item,
+        destinationPath: buildPreviewDestinationPath({
+          mediaType: preview.mediaType,
+          title: preview.title,
+          folderName: selectedFolderName ?? preview.matchedFolderName,
+          year: preview.year,
+          season: toPositiveInteger(preview.season),
+          episode: toPositiveInteger(item.episode),
+          extension: item.extension,
+          libraryPaths
+        })
+      };
+    })
+  };
+}
+
+export function editableSeasonValue(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
 export function statusLabel(status: ClientJobStatus): string {
   return status.slice(0, 1).toUpperCase() + status.slice(1);
 }
@@ -115,6 +152,55 @@ function humanBytes(value: number): string {
     unit = units[i];
   }
   return `${amount.toFixed(amount >= 10 ? 1 : 2)} ${unit}`;
+}
+
+function buildPreviewDestinationPath(input: {
+  mediaType: ClientMediaType;
+  title: string;
+  folderName?: string;
+  year?: string;
+  season?: number;
+  episode?: number;
+  extension: string;
+  libraryPaths: Record<ClientMediaType, string>;
+}): string {
+  const title = safeSegment(input.title);
+  const folderTitle = input.folderName ? safeSegment(input.folderName) : title;
+  const yearSuffix = input.year ? ` (${input.year})` : "";
+
+  if (input.mediaType === "movie") {
+    const folder = input.folderName ? folderTitle : `${title}${yearSuffix}`;
+    return joinPath(input.libraryPaths.movie, folder, `${folder}${input.extension}`);
+  }
+
+  const season = input.season ?? 1;
+  const episode = input.episode ?? 1;
+  const seasonFolder = `Season ${pad2(season)}`;
+  const file = `${title} - s${pad2(season)}e${pad2(episode)}${input.extension}`;
+  return joinPath(input.libraryPaths.series, folderTitle, seasonFolder, file);
+}
+
+function joinPath(root: string, ...segments: string[]): string {
+  const separator = root.includes("\\") ? "\\" : "/";
+  const trimmedRoot = root.replace(/[\\/]+$/g, "");
+  const trimmedSegments = segments.map((segment) => segment.replace(/^[\\/]+|[\\/]+$/g, ""));
+  return [trimmedRoot, ...trimmedSegments].join(separator);
+}
+
+function safeSegment(value: string): string {
+  return cleanTitle(value).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "").trim() || "Untitled";
+}
+
+function cleanTitle(value: string): string {
+  return (
+    value
+      .replace(/\b30nama\b/gi, "")
+      .replace(/\bdownload\b/gi, "")
+      .replace(/\(\s*\)/g, " ")
+      .replace(/[|_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() || "Untitled"
+  );
 }
 
 function pad2(value: number): string {

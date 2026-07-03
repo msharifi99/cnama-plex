@@ -7,6 +7,7 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { config } from "./config.js";
 import { AppDatabase } from "./db.js";
+import type { ClearHistoryResult } from "./db.js";
 import type { JobRecord } from "./types.js";
 
 type Broadcast = (event: unknown) => void;
@@ -75,6 +76,14 @@ export class DownloadManager {
     return job;
   }
 
+  clearHistory(ids: number[]): ClearHistoryResult {
+    const result = this.db.clearHistory(ids);
+    if (result.deletedIds.length > 0) {
+      this.broadcastJobs();
+    }
+    return result;
+  }
+
   private pump(): void {
     if (this.pumping) {
       return;
@@ -139,8 +148,8 @@ export class DownloadManager {
       return;
     }
 
-    await fsp.mkdir(path.dirname(job.tmpPath), { recursive: true });
-    await fsp.mkdir(path.dirname(job.destinationPath), { recursive: true });
+    await ensureWritableDirectory("temporary download", path.dirname(job.tmpPath), job.tmpPath);
+    await ensureWritableDirectory("Plex destination", path.dirname(job.destinationPath), job.destinationPath);
 
     const partialBytes = await fileSize(job.tmpPath);
     if (partialBytes === 0 && config.downloadConnections > 1) {
@@ -424,7 +433,7 @@ function isPrivateAddress(address: string): boolean {
 }
 
 async function moveCompletedFile(source: string, destination: string): Promise<void> {
-  await fsp.mkdir(path.dirname(destination), { recursive: true });
+  await ensureWritableDirectory("Plex destination", path.dirname(destination), destination);
   try {
     await fsp.rename(source, destination);
   } catch (error) {
@@ -434,6 +443,38 @@ async function moveCompletedFile(source: string, destination: string): Promise<v
     await fsp.copyFile(source, destination);
     await fsp.unlink(source);
   }
+}
+
+async function ensureWritableDirectory(label: string, directory: string, targetPath: string): Promise<void> {
+  try {
+    await fsp.mkdir(directory, { recursive: true });
+  } catch (error) {
+    throw new Error(
+      `Unable to create ${label} directory ${directory} for ${targetPath}: ${formatError(error)}. ` +
+        "Ensure the app user can write to the parent directory. For Docker bind mounts, make the host " +
+        "directory writable by PUID/PGID; for systemd, check ownership, group permissions, and ReadWritePaths.",
+      { cause: error }
+    );
+  }
+
+  try {
+    await fsp.access(directory, fs.constants.W_OK);
+  } catch (error) {
+    throw new Error(
+      `${capitalize(label)} directory is not writable at ${directory} for ${targetPath}: ${formatError(error)}. ` +
+        "Ensure the app user can write to this directory. For Docker bind mounts, make the host directory " +
+        "writable by PUID/PGID; for systemd, check ownership, group permissions, and ReadWritePaths.",
+      { cause: error }
+    );
+  }
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 async function exists(filePath: string): Promise<boolean> {

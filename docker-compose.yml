@@ -7,6 +7,7 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-8010}:8010"
+    user: "${PUID:-1000}:${PGID:-1000}"
     environment:
       HOST: 0.0.0.0
       PORT: 8010
@@ -20,6 +21,6 @@ services:
       DOWNLOAD_CONCURRENCY: "${DOWNLOAD_CONCURRENCY:-2}"
       DOWNLOAD_CONNECTIONS: "${DOWNLOAD_CONNECTIONS:-32}"
     volumes:
-      - ${CNAMA_DATA_DIR:-./data}:/data
-      - ${PLEX_MOVIES_DIR:-./data/plex/Movies}:/media/movies
-      - ${PLEX_TV_DIR:-./data/plex/TV}:/media/tv
+      - ${CNAMA_DATA_DIR:-./data}:/data:rw
+      - ${PLEX_MOVIES_DIR:-./data/plex/Movies}:/media/movies:rw
+      - ${PLEX_TV_DIR:-./data/plex/TV}:/media/tv:rw

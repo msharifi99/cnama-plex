@@ -40,6 +40,14 @@ export type NewJobInput = {
   tmpPath: string;
 };
 
+export type ClearHistoryResult = {
+  deletedIds: number[];
+  blockedIds: number[];
+  missingIds: number[];
+};
+
+const REMOVABLE_JOB_STATUSES = new Set<JobStatus>(["completed", "failed", "canceled", "skipped"]);
+
 export class AppDatabase {
   private readonly db: DatabaseSync;
 
@@ -176,6 +184,37 @@ export class AppDatabase {
       bytesTotal: undefined,
       completedAt: undefined
     });
+  }
+
+  clearHistory(ids: number[]): ClearHistoryResult {
+    const uniqueIds = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
+    if (uniqueIds.length === 0) {
+      return { deletedIds: [], blockedIds: [], missingIds: [] };
+    }
+
+    const placeholders = uniqueIds.map(() => "?").join(", ");
+    const rows = this.db
+      .prepare(`SELECT id, status FROM jobs WHERE id IN (${placeholders})`)
+      .all(...uniqueIds) as Array<Pick<JobRow, "id" | "status">>;
+    const foundIds = new Set(rows.map((row) => row.id));
+    const deletedIds = rows.filter((row) => REMOVABLE_JOB_STATUSES.has(row.status)).map((row) => row.id);
+    const blockedIds = rows.filter((row) => !REMOVABLE_JOB_STATUSES.has(row.status)).map((row) => row.id);
+    const missingIds = uniqueIds.filter((id) => !foundIds.has(id));
+
+    if (deletedIds.length > 0) {
+      const deletePlaceholders = deletedIds.map(() => "?").join(", ");
+      this.db.exec("BEGIN");
+      try {
+        this.db.prepare(`DELETE FROM jobs WHERE id IN (${deletePlaceholders})`).run(...deletedIds);
+        this.db.prepare("DELETE FROM batches WHERE NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.batch_id = batches.id)").run();
+        this.db.exec("COMMIT");
+      } catch (error) {
+        this.db.exec("ROLLBACK");
+        throw error;
+      }
+    }
+
+    return { deletedIds, blockedIds, missingIds };
   }
 
   private migrate(): void {

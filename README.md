@@ -346,6 +346,7 @@ DOWNLOAD_CONNECTIONS=32
 - `POST /api/detected-links/preview`
 - `POST /api/download-batches`
 - `GET /api/jobs`
+- `POST /api/jobs/history/clear`
 - `POST /api/jobs/:id/cancel`
 - `POST /api/jobs/:id/retry`
 - `GET /ws/jobs`

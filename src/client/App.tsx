@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { buildQueueRequest, formatBytes, jobTitleLine, parseLinks, statusLabel } from "./viewModel";
+import { buildQueueRequest, editableSeasonValue, formatBytes, jobTitleLine, parseLinks, previewWithUpdatedDestinationPaths, statusLabel } from "./viewModel";
 
 type MediaType = "movie" | "series";
 type JobStatus = "queued" | "running" | "completed" | "failed" | "canceled" | "skipped";
@@ -10,7 +10,7 @@ type DetectedLink = { url: string; label?: string };
 type PreviewItem = DetectedLink & {
   id: string;
   selected: boolean;
-  episode?: number;
+  episode?: string | number;
   extension: string;
   destinationPath: string;
 };
@@ -19,7 +19,8 @@ type Preview = {
   title: string;
   year?: string;
   mediaType: MediaType;
-  season: string;
+  season: string | number;
+  libraryPaths: Record<MediaType, string>;
   matchedFolderName?: string;
   folderCandidates: string[];
   items: PreviewItem[];
@@ -107,7 +108,11 @@ export function App() {
   const activeJobs = useMemo(() => jobs.filter((j) => j.status === "queued" || j.status === "running"), [jobs]);
   const needsActionJobs = useMemo(() => jobs.filter((j) => j.status === "failed" || j.status === "canceled"), [jobs]);
   const completedJobs = useMemo(() => jobs.filter((j) => j.status === "completed" || j.status === "skipped"), [jobs]);
-  const selectedCount = useMemo(() => preview?.items.filter((i) => i.selected).length ?? 0, [preview]);
+  const displayPreview = useMemo(
+    () => (preview ? previewWithUpdatedDestinationPaths(preview, selectedFolderName) : null),
+    [preview, selectedFolderName]
+  );
+  const selectedCount = useMemo(() => displayPreview?.items.filter((i) => i.selected).length ?? 0, [displayPreview]);
 
   useEffect(() => {
     if (activeJobs.length === 0) {
@@ -234,12 +239,12 @@ export function App() {
             </div>
           </section>
 
-          {preview ? (
+          {displayPreview ? (
             <section className="review-panel" aria-label="Review detected downloads">
               <div className="review-heading">
                 <div>
                   <span className="eyebrow">Review</span>
-                  <h2>{preview.title}</h2>
+                  <h2>{displayPreview.title}</h2>
                 </div>
                 <div className="selection-summary">
                   <strong>{selectedCount}</strong>
@@ -250,7 +255,7 @@ export function App() {
               <div className="metadata-grid">
                 <Field label="Title">
                   <input
-                    value={preview.title}
+                    value={displayPreview.title}
                     onChange={(e) => {
                       setSelectedFolderName(undefined);
                       setPageTitle(e.target.value);
@@ -260,14 +265,26 @@ export function App() {
                 </Field>
                 <Field label="Year">
                   <input
-                    value={preview.year ?? ""}
+                    value={displayPreview.year ?? ""}
                     onChange={(e) => setPreview((p) => (p ? { ...p, year: e.target.value } : null))}
                   />
                 </Field>
                 <Field label="Type">
                   <select
-                    value={preview.mediaType}
-                    onChange={(e) => setPreview((p) => (p ? { ...p, mediaType: e.target.value as MediaType } : null))}
+                    value={displayPreview.mediaType}
+                    onChange={(e) => {
+                      setSelectedFolderName(undefined);
+                      setPreview((p) => (
+                        p
+                          ? {
+                              ...p,
+                              mediaType: e.target.value as MediaType,
+                              matchedFolderName: undefined,
+                              folderCandidates: []
+                            }
+                          : null
+                      ));
+                    }}
                   >
                     <option value="series">Series</option>
                     <option value="movie">Movie</option>
@@ -276,23 +293,25 @@ export function App() {
                 <Field label="Season">
                   <input
                     type="text"
-                    value={preview.season}
-                    disabled={preview.mediaType === "movie"}
-                    onChange={(e) => setPreview((p) => (p ? { ...p, season: e.target.value || "1" } : null))}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={displayPreview.season}
+                    disabled={displayPreview.mediaType === "movie"}
+                    onChange={(e) => setPreview((p) => (p ? { ...p, season: editableSeasonValue(e.target.value) } : null))}
                   />
                 </Field>
               </div>
 
-              {(preview.matchedFolderName || preview.folderCandidates.length > 0) && (
+              {(displayPreview.matchedFolderName || displayPreview.folderCandidates.length > 0) && (
                 <div className="folder-match">
-                  {preview.folderCandidates.length > 0 ? (
+                  {displayPreview.folderCandidates.length > 0 ? (
                     <Field label="Folder">
                       <select
-                        value={selectedFolderName ?? preview.matchedFolderName ?? ""}
+                        value={selectedFolderName ?? displayPreview.matchedFolderName ?? ""}
                         onChange={(e) => setSelectedFolderName(e.target.value || undefined)}
                       >
-                        <option value="">New folder: {preview.title}</option>
-                        {preview.folderCandidates.map((folder) => (
+                        <option value="">New folder: {displayPreview.title}</option>
+                        {displayPreview.folderCandidates.map((folder) => (
                           <option value={folder} key={folder}>
                             {folder}
                           </option>
@@ -300,14 +319,14 @@ export function App() {
                       </select>
                     </Field>
                   ) : (
-                    <span>Matched existing folder: {preview.matchedFolderName}</span>
+                    <span>Matched existing folder: {displayPreview.matchedFolderName}</span>
                   )}
                 </div>
               )}
 
               <div className="items-header">
                 <span>
-                  {selectedCount} of {preview.items.length} downloads
+                  {selectedCount} of {displayPreview.items.length} downloads
                 </span>
                 <div className="segmented-actions" aria-label="Selection actions">
                   <button type="button" onClick={() => selectAll(true)}>
@@ -320,7 +339,7 @@ export function App() {
               </div>
 
               <div className="episode-list">
-                {preview.items.map((item, index) => (
+                {displayPreview.items.map((item, index) => (
                   <label className={item.selected ? "episode-row is-selected" : "episode-row"} key={item.id}>
                     <input
                       type="checkbox"
@@ -336,7 +355,7 @@ export function App() {
                       type="text"
                       value={item.episode ?? ""}
                       aria-label="Episode number"
-                      disabled={preview.mediaType === "movie"}
+                      disabled={displayPreview.mediaType === "movie"}
                       onChange={(e) => updateItem(item.id, { episode: Number.parseInt(e.target.value, 10) || undefined })}
                     />
                   </label>
@@ -407,6 +426,7 @@ function JobsPanel({ jobs, onRefresh }: { jobs: Job[]; onRefresh: () => void }) 
 
   const filteredJobs = useMemo(() => jobs.filter((job) => jobMatchesTab(job, activeTab)), [activeTab, jobs]);
   const groupedJobs = useMemo(() => groupJobsByTitle(filteredJobs), [filteredJobs]);
+  const removableFilteredJobIds = useMemo(() => filteredJobs.filter(isRemovableJob).map((job) => job.id), [filteredJobs]);
 
   function toggleGroup(title: string) {
     setCollapsedGroups((current) => {
@@ -449,10 +469,21 @@ function JobsPanel({ jobs, onRefresh }: { jobs: Job[]; onRefresh: () => void }) 
           ))}
         </div>
 
-        <label className="group-toggle">
-          <input type="checkbox" checked={groupByTitle} onChange={(event) => setGroupByTitle(event.target.checked)} />
-          <span>Group by title</span>
-        </label>
+        <div className="history-actions">
+          <label className="group-toggle">
+            <input type="checkbox" checked={groupByTitle} onChange={(event) => setGroupByTitle(event.target.checked)} />
+            <span>Group by title</span>
+          </label>
+          <button
+            type="button"
+            className="history-clear-button"
+            disabled={removableFilteredJobIds.length === 0}
+            onClick={() => void clearJobHistory(removableFilteredJobIds, onRefresh)}
+          >
+            <IconTrash />
+            <span>Clear shown</span>
+          </button>
+        </div>
       </div>
 
       <div className="job-list">
@@ -467,23 +498,37 @@ function JobsPanel({ jobs, onRefresh }: { jobs: Job[]; onRefresh: () => void }) 
         {groupByTitle
           ? groupedJobs.map((group) => {
               const collapsed = collapsedGroups.has(group.title);
+              const removableGroupJobIds = group.jobs.filter(isRemovableJob).map((job) => job.id);
               return (
                 <section className={collapsed ? "job-group is-collapsed" : "job-group"} key={group.title}>
-                  <button
-                    type="button"
-                    className="job-group-heading"
-                    aria-expanded={!collapsed}
-                    onClick={() => toggleGroup(group.title)}
-                  >
-                    <span className="group-chevron" aria-hidden="true">
-                      <IconChevron />
-                    </span>
-                    <span className="group-title">
-                      <strong>{group.title}</strong>
-                      <span>{group.jobs.length} item{group.jobs.length !== 1 ? "s" : ""}</span>
-                    </span>
-                    <GroupSummary jobs={group.jobs} />
-                  </button>
+                  <div className="job-group-heading">
+                    <button
+                      type="button"
+                      className="job-group-toggle"
+                      aria-expanded={!collapsed}
+                      onClick={() => toggleGroup(group.title)}
+                    >
+                      <span className="group-chevron" aria-hidden="true">
+                        <IconChevron />
+                      </span>
+                      <span className="group-title">
+                        <strong>{group.title}</strong>
+                        <span>{group.jobs.length} item{group.jobs.length !== 1 ? "s" : ""}</span>
+                      </span>
+                      <GroupSummary jobs={group.jobs} />
+                    </button>
+                    {removableGroupJobIds.length > 0 ? (
+                      <button
+                        type="button"
+                        className="icon-button icon-button-danger"
+                        aria-label={`Clear ${group.title} history`}
+                        title={`Clear ${group.title} history`}
+                        onClick={() => void clearJobHistory(removableGroupJobIds, onRefresh)}
+                      >
+                        <IconTrash />
+                      </button>
+                    ) : null}
+                  </div>
                   {!collapsed ? (
                     <div className="job-group-list">
                       {group.jobs.map((job) => (
@@ -531,6 +576,17 @@ function JobCard({ job, onRefresh }: { job: Job; onRefresh: () => void }) {
             Retry
           </button>
         )}
+        {isRemovableJob(job) && (
+          <button
+            type="button"
+            className="icon-button icon-button-danger"
+            aria-label="Remove from history"
+            title="Remove from history"
+            onClick={() => void clearJobHistory([job.id], onRefresh)}
+          >
+            <IconTrash />
+          </button>
+        )}
       </div>
     </article>
   );
@@ -557,6 +613,21 @@ function StatusBadge({ status }: { status: JobStatus }) {
 async function postJobAction(id: number, action: "cancel" | "retry", onDone: () => void) {
   await fetch(apiPath(`/api/jobs/${id}/${action}`), { method: "POST" });
   onDone();
+}
+
+async function clearJobHistory(ids: number[], onDone: () => void) {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return;
+
+  const response = await fetch(apiPath("/api/jobs/history/clear"), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ids: uniqueIds })
+  });
+
+  if (response.ok) {
+    onDone();
+  }
 }
 
 function apiPath(path: string): string {
@@ -599,6 +670,10 @@ function isNeedsActionJob(job: Job): boolean {
 
 function isDoneJob(job: Job): boolean {
   return job.status === "completed" || job.status === "skipped";
+}
+
+function isRemovableJob(job: Job): boolean {
+  return isDoneJob(job) || isNeedsActionJob(job);
 }
 
 function groupJobsByTitle(jobs: Job[]): Array<{ title: string; jobs: Job[] }> {
@@ -669,6 +744,18 @@ function IconChevron() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
+function IconTrash() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v5" />
+      <path d="M14 11v5" />
     </svg>
   );
 }

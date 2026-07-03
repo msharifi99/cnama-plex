@@ -607,6 +607,12 @@ svg {
   padding: 0;
 }
 
+.icon-button-danger {
+  border-color: rgba(180, 35, 24, 0.18);
+  background: #fff9f8;
+  color: var(--danger);
+}
+
 .jobs-controls {
   display: grid;
   gap: 10px;
@@ -649,6 +655,13 @@ svg {
   background: #edf8f6;
 }
 
+.history-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .group-toggle {
   display: flex;
   min-height: 38px;
@@ -668,6 +681,26 @@ svg {
   width: 16px;
   height: 16px;
   accent-color: var(--accent);
+}
+
+.history-clear-button {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-color: rgba(180, 35, 24, 0.18);
+  background: #fff9f8;
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.history-clear-button svg {
+  width: 16px;
+  height: 16px;
 }
 
 .job-list {
@@ -699,19 +732,32 @@ svg {
   top: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   width: calc(100% + 24px);
   min-height: 58px;
   margin: 0 -12px;
-  padding: 10px 16px;
+  padding: 9px 12px 9px 16px;
   border: 0;
   border-bottom: 1px solid rgba(22, 24, 29, 0.08);
   border-radius: 0;
   background: var(--surface);
   text-align: left;
   box-shadow: 0 8px 18px rgba(40, 35, 28, 0.06);
+}
+
+.job-group-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
 }
 
 .job-group-heading strong {
@@ -725,9 +771,9 @@ svg {
   font-size: 11px;
 }
 
-.job-group-heading:hover {
+.job-group-toggle:hover {
   border-color: rgba(22, 24, 29, 0.08);
-  background: var(--surface-2);
+  background: transparent;
   transform: none;
 }
 
@@ -880,7 +926,9 @@ svg {
 
 .job-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 @media (max-width: 1040px) {

@@ -109,6 +109,32 @@ function registerApiRoutes(prefix: string): void {
 
   app.get(`${prefix}/api/jobs`, async () => ({ jobs: db.listJobs() }));
 
+  app.post(`${prefix}/api/jobs/history/clear`, async (request, reply) => {
+    const body = request.body as { ids?: unknown };
+    if (!Array.isArray(body.ids)) {
+      reply.code(400).send({ error: "ids must be an array of job ids" });
+      return;
+    }
+
+    const ids = parseJobIds(body.ids);
+    if (ids.length === 0) {
+      reply.code(400).send({ error: "ids must include at least one valid job id" });
+      return;
+    }
+
+    const result = downloads.clearHistory(ids);
+    if (result.deletedIds.length === 0 && result.blockedIds.length > 0) {
+      reply.code(409).send({ error: "Active downloads must be canceled or finished before clearing history", ...result });
+      return;
+    }
+    if (result.deletedIds.length === 0 && result.blockedIds.length === 0) {
+      reply.code(404).send({ error: "No matching jobs found", ...result });
+      return;
+    }
+
+    return result;
+  });
+
   app.post(`${prefix}/api/jobs/:id/cancel`, async (request, reply) => {
     const id = getIdParam(request.params);
     if (!id) { reply.code(400).send({ error: "Invalid job id" }); return; }
@@ -133,4 +159,11 @@ function isMediaType(value: unknown): value is MediaType {
 function getIdParam(params: unknown): number | undefined {
   const id = Number.parseInt(String((params as { id?: string }).id), 10);
   return Number.isFinite(id) && id > 0 ? id : undefined;
+}
+
+function parseJobIds(value: unknown[]): number[] {
+  const ids = value
+    .map((id) => (typeof id === "number" ? id : Number.parseInt(String(id), 10)))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  return [...new Set(ids)];
 }

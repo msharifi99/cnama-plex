@@ -61,6 +61,10 @@ export function buildPreview(pageTitle: string | undefined, links: DetectedLink[
     year,
     mediaType,
     season,
+    libraryPaths: {
+      movie: config.plexMoviesDir,
+      series: config.plexTvDir
+    },
     matchedFolderName: folderMatch.matchedFolderName,
     folderCandidates: folderMatch.folderCandidates,
     items: normalized.map((link, index) => {
